@@ -9,14 +9,23 @@
 // Including SimpleSetup.h will pull in MOST of what you need to plan
 #include <ompl/geometric/SimpleSetup.h>
 // Except for the state space definitions and any planners
+#include <ompl/geometric/planners/prm/PRM.h>
+#include <ompl/geometric/planners/est/EST.h>
+#include <ompl/geometric/planners/rrt/RRT.h>
+
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 #include <ompl/base/spaces/SE2StateSpace.h>
 #include <ompl/base/spaces/SO2StateSpace.h>
+#include <ompl/tools/benchmark/Benchmark.h>
+#include <omplapp/config.h>
+
 #include "randomtree.h"
 
 typedef std::pair<double, double> Point2D;
 typedef std::vector<Point2D> Rect;
 
+const int CHOICES = 3;
+const int ENVIRONMENTS = 2;
 const double epsilon = 0.01;
 const double radius = 0.1;
 const double square = 0.125;
@@ -185,12 +194,12 @@ bool stateValidSquareRobot(const ompl::base::State* state, const double minBound
     {
         // None of the points of square robot are contained inside of the obstacle 
         /*
-        for(int j = 0; j < pts.size(); ++j)
-        {
-            if(pts[j].first >= r[0].first && pts[j].first <= r[2].first && pts[j].second >= r[0].second && pts[j].second <= r[2].second)
-                return false;
-        }
-        */
+           for(int j = 0; j < pts.size(); ++j)
+           {
+           if(pts[j].first >= r[0].first && pts[j].first <= r[2].first && pts[j].second >= r[0].second && pts[j].second <= r[2].second)
+           return false;
+           }
+         */
 
         // Edge of rectangle r
         for(int i = 0; i < r.size(); ++i)
@@ -210,7 +219,7 @@ bool stateValidSquareRobot(const ompl::base::State* state, const double minBound
 }
 
 
-void planWithSimpleSetupR2(int environment, int robot, std::vector<Rect> obstacles)
+void planWithSimpleSetupR2(int environment, int robot, std::vector<Rect> obstacles, bool benchmark = false)
 {
     // Step 1) Create the state (configuration) space for your system
     // For a robot that can translate in the plane, we can use R^2 directly
@@ -262,37 +271,56 @@ void planWithSimpleSetupR2(int environment, int robot, std::vector<Rect> obstacl
     // set the start and goal states
     ss.setStartAndGoalStates(start, goal);
 
-    // Step 5) (optional) Specify a planning algorithm to use
-    ompl::base::PlannerPtr planner(new ompl::geometric::randomtree(ss.getSpaceInformation()));
-    ss.setPlanner(planner);
-
-    // Step 6) Attempt to solve the problem within the given time (seconds)
-    ompl::base::PlannerStatus solved = ss.solve(1.0);
-
-    if (solved)
+    if(benchmark)
     {
-        // Apply some heuristics to simplify (and prettify) the solution
-        ss.simplifySolution();
+        ompl::tools::Benchmark b(ss, "Project 3");
+        b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::randomtree(ss.getSpaceInformation())));
+        b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::PRM(ss.getSpaceInformation())));
+        b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::EST(ss.getSpaceInformation())));
+        b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRT(ss.getSpaceInformation())));
 
-        // print the path to screen
-        std::cout << "Found solution:" << std::endl;
-        ompl::geometric::PathGeometric& path = ss.getSolutionPath();
-        path.interpolate(50);
-        path.printAsMatrix(std::cout);
-
-        // print path to file
-        std::ofstream fout("path.txt");
-        fout << "R2" << std::endl;
-        fout << environment << std::endl;
-        fout << robot << std::endl;
-        path.printAsMatrix(fout);
-        fout.close();
+        ompl::tools::Benchmark::Request req;
+        req.maxTime = 30.0;
+        req.maxMem = 1000.0;
+        req.runCount = 30;
+        req.displayProgress = true;
+        b.benchmark(req);
+        b.saveResultsToFile();
     }
     else
-        std::cout << "No solution found" << std::endl;
+    {
+        // Step 5) (optional) Specify a planning algorithm to use
+        ompl::base::PlannerPtr planner(new ompl::geometric::randomtree(ss.getSpaceInformation()));
+        ss.setPlanner(planner);
+
+        // Step 6) Attempt to solve the problem within the given time (seconds)
+        ompl::base::PlannerStatus solved = ss.solve(1.0);
+
+        if (solved)
+        {
+            // Apply some heuristics to simplify (and prettify) the solution
+            ss.simplifySolution();
+
+            // print the path to screen
+            std::cout << "Found solution:" << std::endl;
+            ompl::geometric::PathGeometric& path = ss.getSolutionPath();
+            path.interpolate(50);
+            path.printAsMatrix(std::cout);
+
+            // print path to file
+            std::ofstream fout("path.txt");
+            fout << "R2" << std::endl;
+            fout << environment << std::endl;
+            fout << robot << std::endl;
+            path.printAsMatrix(fout);
+            fout.close();
+        }
+        else
+            std::cout << "No solution found" << std::endl;
+    }
 }
 
-void planWithSimpleSetupSE2(int environment, int robot, std::vector<Rect> obstacles)
+void planWithSimpleSetupSE2(int environment, int robot, std::vector<Rect> obstacles, bool benchmark = false)
 {
     // Step 1) Create the state (configuration) space for your system
     // In this instance, we will plan for a unit-length line segment
@@ -340,41 +368,95 @@ void planWithSimpleSetupSE2(int environment, int robot, std::vector<Rect> obstac
     // set the start and goal states
     ss.setStartAndGoalStates(start, goal);
 
-    // Step 5) (optional) Specify a planning algorithm to use
-    //ompl::base::PlannerPtr planner(new ompl::geometric::PRM(ss.getSpaceInformation()));
-    //ss.setPlanner(planner);
-    // #include <ompl/geometric/planners/prm/PRM.h>
-    ompl::base::PlannerPtr planner(new ompl::geometric::randomtree(ss.getSpaceInformation()));
-    ss.setPlanner(planner);
-
-    // Step 6) Attempt to solve the problem within the given time (seconds)
-    ompl::base::PlannerStatus solved = ss.solve(1.0);
-
-    if (solved)
+    if(benchmark)
     {
-        // Apply some heuristics to simplify (and prettify) the solution
-        ss.simplifySolution();
+        // Benchmark Code - Project 3
+        ompl::tools::Benchmark b(ss, "Project 3");
+        b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::randomtree(ss.getSpaceInformation())));
+        b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::PRM(ss.getSpaceInformation())));
+        b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::EST(ss.getSpaceInformation())));
+        b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRT(ss.getSpaceInformation())));
 
-        // print the path to screen
-        std::cout << "Found solution:" << std::endl;
-        ompl::geometric::PathGeometric& path = ss.getSolutionPath();
-        path.interpolate(50);
-        path.printAsMatrix(std::cout);
+        ompl::tools::Benchmark::Request req;
+        req.maxTime = 30.0;
+        req.maxMem = 1000.0;
+        req.runCount = 20;
+        req.displayProgress = true;
+        b.benchmark(req);
+        b.saveResultsToFile();
 
-        // print path to file
-        std::ofstream fout("path.txt");
-        fout << "SE2" << std::endl;
-        fout << environment << std::endl;
-        fout << robot << std::endl;
-        path.printAsMatrix(fout);
-        fout.close();
     }
     else
-        std::cout << "No solution found" << std::endl;
+    {
+        // Step 5) (optional) Specify a planning algorithm to use
+        ompl::base::PlannerPtr planner(new ompl::geometric::randomtree(ss.getSpaceInformation()));
+        ss.setPlanner(planner);
+
+        // Step 6) Attempt to solve the problem within the given time (seconds)
+        ompl::base::PlannerStatus solved = ss.solve(1.0);
+
+        if (solved)
+        {
+            // Apply some heuristics to simplify (and prettify) the solution
+            ss.simplifySolution();
+
+            // print the path to screen
+            std::cout << "Found solution:" << std::endl;
+            ompl::geometric::PathGeometric& path = ss.getSolutionPath();
+            path.interpolate(50);
+            path.printAsMatrix(std::cout);
+
+            // print path to file
+            std::ofstream fout("path.txt");
+            fout << "SE2" << std::endl;
+            fout << environment << std::endl;
+            fout << robot << std::endl;
+            path.printAsMatrix(fout);
+            fout.close();
+        }
+        else
+            std::cout << "No solution found" << std::endl;
+    }
 }
 
 int main(int, char **)
 {
+    std::vector<std::vector<Rect>> obstacles;
+    std::vector<Rect> go_around_obstacles;
+    std::vector<Rect> narrow_obstacles;
+    std::vector<Point2D> rect1;
+    std::vector<Point2D> rect2;
+    std::vector<Point2D> rect3;
+    std::vector<Point2D> rect4;
+    // Go-Around L-Shaped Obstacle
+    rect1.push_back(std::make_pair(-0.5, -0.5));
+    rect1.push_back(std::make_pair(-0.25, -0.5));
+    rect1.push_back(std::make_pair(-0.25, 0.5));
+    rect1.push_back(std::make_pair(-0.5, 0.5));
+
+    rect2.push_back(std::make_pair(-0.25, -0.5));
+    rect2.push_back(std::make_pair(0.25, -0.5));
+    rect2.push_back(std::make_pair(0.25, -0.25));
+    rect2.push_back(std::make_pair(-0.25, -0.25));
+
+    // Narrow Passage in-between two obstacles
+    rect3.push_back(std::make_pair(-1.0, -0.5));
+    rect3.push_back(std::make_pair(-0.25, -0.5));
+    rect3.push_back(std::make_pair(-0.25, 0.5));
+    rect3.push_back(std::make_pair(-1.0, 0.5));
+
+    rect4.push_back(std::make_pair(0.25, -0.5));
+    rect4.push_back(std::make_pair(1.0, -0.5));
+    rect4.push_back(std::make_pair(1.0, 0.5));
+    rect4.push_back(std::make_pair(0.25, 0.5));
+
+    go_around_obstacles.push_back(rect1);
+    go_around_obstacles.push_back(rect2);
+    narrow_obstacles.push_back(rect3);
+    narrow_obstacles.push_back(rect4);
+    obstacles.push_back(go_around_obstacles);
+    obstacles.push_back(narrow_obstacles);
+
     int choice;
     do
     {
@@ -382,9 +464,29 @@ int main(int, char **)
         std::cout << " (0) A point in 2D" << std::endl;
         std::cout << " (1) A circle in 2D" << std::endl;
         std::cout << " (2) A square in 2D" << std::endl;
+        std::cout << " (3) Benchmark RandomTree Planner" << std::endl;
 
         std::cin >> choice;
-    } while (choice < 0 || choice > 2);
+    } while (choice < 0 || choice > CHOICES);
+
+    if(choice == CHOICES)
+    {
+       for(int i = 0; i < ENVIRONMENTS; ++i)
+       {
+            planWithSimpleSetupR2(i, 0, obstacles[i], true);
+       }
+
+       for(int i = 0; i < ENVIRONMENTS; ++i)
+       {
+            planWithSimpleSetupR2(i, 1, obstacles[i], true);
+       }
+
+       for(int i = 0; i < ENVIRONMENTS; ++i)
+       {
+            planWithSimpleSetupSE2(i, 2, obstacles[i], true);
+       }
+       return 0;
+    }
 
     int environment;
     do
@@ -394,50 +496,18 @@ int main(int, char **)
         std::cout << " (1) Narrow Path" << std::endl;
 
         std::cin >> environment;
-    } while (environment < 0 || environment > 1);
-
-    std::vector<Rect> obstacles;
-    std::vector<Point2D> rect1;
-    std::vector<Point2D> rect2;
-    if(!environment)
-    {
-        // Go-Around L-Shaped Obstacle
-        rect1.push_back(std::make_pair(-0.5, -0.5));
-        rect1.push_back(std::make_pair(-0.25, -0.5));
-        rect1.push_back(std::make_pair(-0.25, 0.5));
-        rect1.push_back(std::make_pair(-0.5, 0.5));
-
-        rect2.push_back(std::make_pair(-0.25, -0.5));
-        rect2.push_back(std::make_pair(0.25, -0.5));
-        rect2.push_back(std::make_pair(0.25, -0.25));
-        rect2.push_back(std::make_pair(-0.25, -0.25));
-    }
-    else
-    {
-        // Narrow Passage in-between two obstacles
-        rect1.push_back(std::make_pair(-1.0, -0.5));
-        rect1.push_back(std::make_pair(-0.25, -0.5));
-        rect1.push_back(std::make_pair(-0.25, 0.5));
-        rect1.push_back(std::make_pair(-1.0, 0.5));
-
-        rect2.push_back(std::make_pair(0.25, -0.5));
-        rect2.push_back(std::make_pair(1.0, -0.5));
-        rect2.push_back(std::make_pair(1.0, 0.5));
-        rect2.push_back(std::make_pair(0.25, 0.5));
-    }
-    obstacles.push_back(rect1);
-    obstacles.push_back(rect2);
+    } while (environment < 0 || environment > ENVIRONMENTS);
 
     switch(choice)
     {
         case 0:
-            planWithSimpleSetupR2(environment, choice, obstacles);
+            planWithSimpleSetupR2(environment, choice, obstacles[environment]);
             break;
         case 1:
-            planWithSimpleSetupR2(environment, choice, obstacles);
+            planWithSimpleSetupR2(environment, choice, obstacles[environment]);
             break;
         case 2:
-            planWithSimpleSetupSE2(environment, choice, obstacles);
+            planWithSimpleSetupSE2(environment, choice, obstacles[environment]);
             break;
     }
     return 0;
