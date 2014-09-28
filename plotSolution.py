@@ -8,20 +8,25 @@ from math import sin, cos
 def plotR2(path, environment, robot):
     fig = plt.figure()
     ax = fig.gca()
+    x0, y0, dx, dy = ax.get_position().bounds
+    maxd = max(dx, dy)
+    width = 6 * maxd / dx
+    height = 6 * maxd / dy
+    fig.set_size_inches((width, height))
 
-    if environment == '1': # L shaped obstacle
+    if environment == '0': # L shaped obstacle
         ax.add_patch(patches.Polygon([(-0.5,0.5),(-0.5,-0.5),(-0.25,-0.5),(-0.25,0.5)], fill=True, color='0.20'))
         ax.add_patch(patches.Polygon([(0.25,-0.25),(0.25,-0.5),(-0.25,-0.5),(-0.25,-0.25)], fill=True, color='0.20'))
-    elif environment == '2': # Two rectangles with space in between
+    elif environment == '1': # Two rectangles with space in between
         ax.add_patch(patches.Polygon([(-1.0,0.5),(-1.0,-0.5),(-0.25,-0.5),(-0.25,0.5)], fill=True, color='0.20'))
         ax.add_patch(patches.Polygon([(1.0,0.5),(1.0,-0.5),(0.25,-0.5),(0.25,0.5)], fill=True, color='0.20'))
 
     # Plotting the path
-    if robot == '1': # point robot
+    if robot == '0': # point robot
         X = [p[0] for p in path]
         Y = [p[1] for p in path]
         ax.plot(X, Y)
-    elif robot == '2': # circle robot
+    elif robot == '1': # circle robot
         for p in path:
             ax.add_patch(patches.Circle((p[0],p[1]), 0.1, fill = False, color = '0.20'))
 
@@ -31,12 +36,17 @@ def plotR2(path, environment, robot):
 def plotSE2(path, environment, robot):
     fig = plt.figure()
     ax = fig.gca()
+    x0, y0, dx, dy = ax.get_position().bounds
+    maxd = max(dx, dy)
+    width = 6 * maxd / dx
+    height = 6 * maxd / dy
+    fig.set_size_inches((width, height))
 
     # Drawing the unit square
-    if environment == '1': # L shaped obstacle
+    if environment == '0': # L shaped obstacle
         ax.add_patch(patches.Polygon([(-0.5,0.5),(-0.5,-0.5),(-0.25,-0.5),(-0.25,0.5)], fill=True, color='0.20'))
         ax.add_patch(patches.Polygon([(0.25,-0.25),(0.25,-0.5),(-0.25,-0.5),(-0.25,-0.25)], fill=True, color='0.20'))
-    elif environment == '2': # Two rectangles with space in between
+    elif environment == '1': # Two rectangles with space in between
         ax.add_patch(patches.Polygon([(-1.0,0.5),(-1.0,-0.5),(-0.25,-0.5),(-0.25,0.5)], fill=True, color='0.20'))
         ax.add_patch(patches.Polygon([(1.0,0.5),(1.0,-0.5),(0.25,-0.5),(0.25,0.5)], fill=True, color='0.20'))
 
@@ -70,7 +80,7 @@ def readPath(filename):
     lines = [line.rstrip() for line in open(filename) if len(line.rstrip()) > 0]
 
     if len(lines) == 0:
-        print "Ain't nuthin in this file"
+        print "Empty File"
         sys.exit(1)
 
     cspace = lines[0].strip()

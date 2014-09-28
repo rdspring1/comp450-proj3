@@ -1,6 +1,8 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <vector>
+#include <math.h>
 
 #include <boost/bind.hpp>
 
@@ -8,18 +10,27 @@
 #include <ompl/geometric/SimpleSetup.h>
 // Except for the state space definitions and any planners
 #include <ompl/base/spaces/RealVectorStateSpace.h>
-
+#include <ompl/base/spaces/SE2StateSpace.h>
 #include <ompl/base/spaces/SO2StateSpace.h>
 #include "randomtree.h"
 
-// This is our state validity checker.  It says every state is valid.
+typedef std::pair<double, double> Point2D;
+typedef std::vector<Point2D> Rect;
+
+const double radius = 0.1;
+
+double dist(double x1, double y1, double x2, double y2)
+{
+    return sqrt(pow(x1-x2, 2) + pow(y1-y2, 2));
+}
+
+// Default state validity checker.  It says every state is valid.
 bool stateAlwaysValid(const ompl::base::State* /*state*/)
 {
     return true;
 }
 
-// TODO
-bool stateValidR2(const ompl::base::State* state, double minB, double maxB, int environment, int robot)
+bool stateValidPointRobot(const ompl::base::State* state, const double minBound, const double maxBound, const std::vector<Rect> obstacles)
 {
     const ompl::base::RealVectorStateSpace::StateType* r2state;
     r2state = state->as<ompl::base::RealVectorStateSpace::StateType>();
@@ -27,13 +38,54 @@ bool stateValidR2(const ompl::base::State* state, double minB, double maxB, int 
     double x = r2state->values[0];
     double y = r2state->values[1];
 
-    if (x >= -0.5 && x <= 0.5 && y >= -0.5 && y <= 0.5) return false;
+    if(x < minBound || y < minBound || x > maxBound || y > maxBound)
+	return false;
+    
+    for(Rect r : obstacles)
+    {
+	if(x >= r[0].first && x <= r[2].first && y >= r[0].second && y <= r[2].second)
+	    return false;
+    }
+
+    return true;
+}
+
+bool stateValidCircleRobot(const ompl::base::State* state, const double minBound, const double maxBound, const std::vector<Rect> obstacles)
+{
+    const ompl::base::RealVectorStateSpace::StateType* r2state;
+    r2state = state->as<ompl::base::RealVectorStateSpace::StateType>();
+
+    double x = r2state->values[0];
+    double y = r2state->values[1];
+
+    if(x < minBound || y < minBound || x > maxBound || y > maxBound)
+	return false;
+    
+    for(Rect r : obstacles)
+    {
+	if(x >= r[0].first-radius && x <= r[2].first+radius && y >= r[0].second && y <= r[2].second)
+	{
+	    return false;
+	}
+	else if(x >= r[0].first && x <= r[2].first && y >= r[0].second-radius && y <= r[2].second+radius)
+	{
+	    return false;
+	}
+	else 
+	{
+	    for(int i = 0; i < r.size(); ++i)
+	    {
+		if(dist(x, y, r[i].first, r[i].second) <= radius)
+		    return false;
+	    }
+	}
+    }
 
     return true;
 }
 
 // TODO
-bool stateValidSE2(const ompl::base::State* state, double minB, double maxB, int environment, int robot)
+bool stateValidSquareRobot(const ompl::base::State* state, const double minBound, const double maxBound, const std::vector<Rect> obstacles)
 {
     const ompl::base::CompoundState* cstate;
     cstate = state->as<ompl::base::CompoundState>();
@@ -59,7 +111,7 @@ bool stateValidSE2(const ompl::base::State* state, double minB, double maxB, int
 }
 
 
-void planWithSimpleSetupR2(int environment, int robot)
+void planWithSimpleSetupR2(int environment, int robot, std::vector<Rect> obstacles)
 {
     // Step 1) Create the state (configuration) space for your system
     // For a robot that can translate in the plane, we can use R^2 directly
@@ -68,8 +120,8 @@ void planWithSimpleSetupR2(int environment, int robot)
 
     // We need to set bounds on R^2
     ompl::base::RealVectorBounds bounds(2);
-    bounds.setLow(-2); // x and y have a minimum of -2
-    bounds.setHigh(2); // x and y have a maximum of 2
+    bounds.setLow(-1); // x and y have a minimum of -2
+    bounds.setHigh(1); // x and y have a maximum of 2
 
     // Cast the r2 pointer to the derived type, then set the bounds
     r2->as<ompl::base::RealVectorStateSpace>()->setBounds(bounds);
@@ -85,8 +137,18 @@ void planWithSimpleSetupR2(int environment, int robot)
     // This is a function that takes a state and returns whether the state is a
     // valid configuration of the system or not.  For geometric planning, this
     // is a collision checker
-    ss.setStateValidityChecker(stateAlwaysValid);
-    //ss.setStateValidityChecker(boost::bind(stateValidR2, _1, -1, 1, environment, robot));
+    switch(robot)
+    {
+	case 0:
+            ss.setStateValidityChecker(boost::bind(stateValidPointRobot, _1, -1, 1, obstacles));
+	    break;
+	case 1:
+            ss.setStateValidityChecker(boost::bind(stateValidCircleRobot, _1, -1, 1, obstacles));
+	    break;
+	default:
+    	    ss.setStateValidityChecker(stateAlwaysValid);
+	    break;
+    }
 
     // Step 4) Specify the start and goal states
     // ScopedState creates the correct state instance for the state space
@@ -102,7 +164,6 @@ void planWithSimpleSetupR2(int environment, int robot)
     ss.setStartAndGoalStates(start, goal);
 
     // Step 5) (optional) Specify a planning algorithm to use
-    //ss.setPlanner();
     ompl::base::PlannerPtr planner(new ompl::geometric::randomtree(ss.getSpaceInformation()));
     ss.setPlanner(planner);
 
@@ -132,7 +193,7 @@ void planWithSimpleSetupR2(int environment, int robot)
         std::cout << "No solution found" << std::endl;
 }
 
-void planWithSimpleSetupSE2(int environment, int robot)
+void planWithSimpleSetupSE2(int environment, int robot, std::vector<Rect> obstacles)
 {
     // Step 1) Create the state (configuration) space for your system
     // In this instance, we will plan for a unit-length line segment
@@ -142,8 +203,8 @@ void planWithSimpleSetupSE2(int environment, int robot)
 
     ompl::base::StateSpacePtr r2(new ompl::base::RealVectorStateSpace(2));
     ompl::base::RealVectorBounds bounds(2);
-    bounds.setLow(-2);
-    bounds.setHigh(2);
+    bounds.setLow(-1);
+    bounds.setHigh(1);
     r2->as<ompl::base::RealVectorStateSpace>()->setBounds(bounds);
 
     ompl::base::StateSpacePtr so2(new ompl::base::SO2StateSpace());
@@ -161,8 +222,15 @@ void planWithSimpleSetupSE2(int environment, int robot)
     // This is a function that takes a state and returns whether the state is a
     // valid configuration of the system or not.  For geometric planning, this
     // is a collision checker
-    ss.setStateValidityChecker(stateAlwaysValid);
-    //ss.setStateValidityChecker(boost::bind(stateValidSE2, _1, -2, 2, environment, robot));
+    switch(robot)
+    {
+	case 2:
+            ss.setStateValidityChecker(boost::bind(stateValidSquareRobot, _1, -1, 1, obstacles));
+	    break;
+	default:
+    	    ss.setStateValidityChecker(stateAlwaysValid);
+	    break;
+    }
 
     // Step 4) Specify the start and goal states
     // ScopedState creates the correct state instance for the state space
@@ -220,33 +288,65 @@ int main(int, char **)
     do
     {
         std::cout << "Plan for: "<< std::endl;
-        std::cout << " (1) A point in 2D" << std::endl;
-        std::cout << " (2) A circle in 2D" << std::endl;
-        std::cout << " (3) A square in 2D" << std::endl;
+        std::cout << " (0) A point in 2D" << std::endl;
+        std::cout << " (1) A circle in 2D" << std::endl;
+        std::cout << " (2) A square in 2D" << std::endl;
 
         std::cin >> choice;
-    } while (choice < 1 || choice > 3);
+    } while (choice < 0 || choice > 2);
  
     int environment;
     do
     {
         std::cout << "Pick Environment: "<< std::endl;
-        std::cout << " (1) Go Around" << std::endl;
-        std::cout << " (2) Narrow Path" << std::endl;
+        std::cout << " (0) Go Around" << std::endl;
+        std::cout << " (1) Narrow Path" << std::endl;
 
         std::cin >> environment;
-    } while (environment < 1 || environment > 2);
+    } while (environment < 0 || environment > 1);
+
+    std::vector<Rect> obstacles;
+    std::vector<Point2D> rect1;
+    std::vector<Point2D> rect2;
+    if(!environment)
+    {
+	// Go-Around L-Shaped Obstacle
+	rect1.push_back(std::make_pair(-0.5, -0.5));
+	rect1.push_back(std::make_pair(-0.25, -0.5));
+	rect1.push_back(std::make_pair(-0.25, 0.5));
+	rect1.push_back(std::make_pair(-0.5, 0.5));
+
+	rect2.push_back(std::make_pair(-0.25, -0.5));
+	rect2.push_back(std::make_pair(0.25, -0.5));
+	rect2.push_back(std::make_pair(0.25, -0.25));
+	rect2.push_back(std::make_pair(-0.25, -0.25));
+    }
+    else
+    {
+	// Narrow Passage in-between two obstacles
+	rect1.push_back(std::make_pair(-1.0, -0.5));
+	rect1.push_back(std::make_pair(-0.25, -0.5));
+	rect1.push_back(std::make_pair(-0.25, 0.5));
+	rect1.push_back(std::make_pair(-1.0, 0.5));
+
+	rect2.push_back(std::make_pair(0.25, -0.5));
+	rect2.push_back(std::make_pair(1.0, -0.5));
+	rect2.push_back(std::make_pair(1.0, 0.5));
+	rect2.push_back(std::make_pair(0.25, 0.5));
+    }
+    obstacles.push_back(rect1);
+    obstacles.push_back(rect2);
 
     switch(choice)
     {
+        case 0:
+            planWithSimpleSetupR2(environment, choice, obstacles);
+            break;
         case 1:
-            planWithSimpleSetupR2(environment, choice);
+            planWithSimpleSetupR2(environment, choice, obstacles);
             break;
         case 2:
-            planWithSimpleSetupR2(environment, choice);
-            break;
-        case 3:
-            planWithSimpleSetupSE2(environment, choice);
+            planWithSimpleSetupSE2(environment, choice, obstacles);
             break;
     }
     return 0;

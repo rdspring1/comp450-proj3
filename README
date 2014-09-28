@@ -14,7 +14,8 @@
 		- [(1.0,0.5),(1.0,-0.5),(0.25,-0.5),(0.25,0.5)]
 
 3. Create exact collision checking methods
-- circle robot radius = 0.1 (can change in plotsolution.py)
+- point robot (DONE)
+- circle robot radius = 0.1 (can change in plotsolution.py) (DONE)
 - side length of square robot = 0.25 (can also change)
 
 4. Compute motion plans for different robot geometries using random tree.
