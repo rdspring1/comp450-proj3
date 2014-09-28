@@ -219,7 +219,7 @@ bool stateValidSquareRobot(const ompl::base::State* state, const double minBound
 }
 
 
-void planWithSimpleSetupR2(int environment, int robot, std::vector<Rect> obstacles, bool benchmark = false)
+void planWithSimpleSetupR2(int environment, int robot, std::vector<Rect> obstacles, std::string title = "Default", bool benchmark = false)
 {
     // Step 1) Create the state (configuration) space for your system
     // For a robot that can translate in the plane, we can use R^2 directly
@@ -273,7 +273,7 @@ void planWithSimpleSetupR2(int environment, int robot, std::vector<Rect> obstacl
 
     if(benchmark)
     {
-        ompl::tools::Benchmark b(ss, "Project 3");
+        ompl::tools::Benchmark b(ss, title);
         b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::randomtree(ss.getSpaceInformation())));
         b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::PRM(ss.getSpaceInformation())));
         b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::EST(ss.getSpaceInformation())));
@@ -282,10 +282,11 @@ void planWithSimpleSetupR2(int environment, int robot, std::vector<Rect> obstacl
         ompl::tools::Benchmark::Request req;
         req.maxTime = 30.0;
         req.maxMem = 1000.0;
-        req.runCount = 30;
+        req.runCount = 20;
         req.displayProgress = true;
         b.benchmark(req);
-        b.saveResultsToFile();
+        std::string logfile = title + ".log";
+        b.saveResultsToFile(logfile.c_str());
     }
     else
     {
@@ -320,23 +321,17 @@ void planWithSimpleSetupR2(int environment, int robot, std::vector<Rect> obstacl
     }
 }
 
-void planWithSimpleSetupSE2(int environment, int robot, std::vector<Rect> obstacles, bool benchmark = false)
+void planWithSimpleSetupSE2(int environment, int robot, std::vector<Rect> obstacles, std::string title = "Default", bool benchmark = false)
 {
     // Step 1) Create the state (configuration) space for your system
     // In this instance, we will plan for a unit-length line segment
     // that both translates and rotates in the plane.
     // The state space can be easily composed of simpler state spaces
-    ompl::base::StateSpacePtr se2;
-
-    ompl::base::StateSpacePtr r2(new ompl::base::RealVectorStateSpace(2));
+    ompl::base::StateSpacePtr se2(new ompl::base::SE2StateSpace());
     ompl::base::RealVectorBounds bounds(2);
     bounds.setLow(-1);
     bounds.setHigh(1);
-    r2->as<ompl::base::RealVectorStateSpace>()->setBounds(bounds);
-
-    ompl::base::StateSpacePtr so2(new ompl::base::SO2StateSpace());
-
-    se2 = r2 + so2;
+    se2->as<ompl::base::SE2StateSpace>()->setBounds(bounds);
 
     // Step 2) Create the SimpleSetup container for the motion planning problem.
     // this container ensures that everything is initialized properly before
@@ -371,7 +366,7 @@ void planWithSimpleSetupSE2(int environment, int robot, std::vector<Rect> obstac
     if(benchmark)
     {
         // Benchmark Code - Project 3
-        ompl::tools::Benchmark b(ss, "Project 3");
+        ompl::tools::Benchmark b(ss, title);
         b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::randomtree(ss.getSpaceInformation())));
         b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::PRM(ss.getSpaceInformation())));
         b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::EST(ss.getSpaceInformation())));
@@ -383,8 +378,8 @@ void planWithSimpleSetupSE2(int environment, int robot, std::vector<Rect> obstac
         req.runCount = 20;
         req.displayProgress = true;
         b.benchmark(req);
-        b.saveResultsToFile();
-
+        std::string logfile = title + ".log";
+        b.saveResultsToFile(logfile.c_str());
     }
     else
     {
@@ -471,21 +466,13 @@ int main(int, char **)
 
     if(choice == CHOICES)
     {
-       for(int i = 0; i < ENVIRONMENTS; ++i)
-       {
-            planWithSimpleSetupR2(i, 0, obstacles[i], true);
-       }
-
-       for(int i = 0; i < ENVIRONMENTS; ++i)
-       {
-            planWithSimpleSetupR2(i, 1, obstacles[i], true);
-       }
-
-       for(int i = 0; i < ENVIRONMENTS; ++i)
-       {
-            planWithSimpleSetupSE2(i, 2, obstacles[i], true);
-       }
-       return 0;
+        planWithSimpleSetupR2(0, 0, obstacles[0], "Point0", true);
+        planWithSimpleSetupR2(0, 1, obstacles[0], "Circle0", true);
+        planWithSimpleSetupSE2(0, 2, obstacles[0], "Square0", true);
+        planWithSimpleSetupR2(1, 0, obstacles[1], "Point1", true);
+        planWithSimpleSetupR2(1, 1, obstacles[1], "Circle1", true);
+        planWithSimpleSetupSE2(1, 2, obstacles[1], "Square1", true);
+        return 0;
     }
 
     int environment;
