@@ -17,11 +17,74 @@
 typedef std::pair<double, double> Point2D;
 typedef std::vector<Point2D> Rect;
 
+const double epsilon = 0.01;
 const double radius = 0.1;
+const double square = 0.125;
 
 double dist(double x1, double y1, double x2, double y2)
 {
     return sqrt(pow(x1-x2, 2) + pow(y1-y2, 2));
+}
+
+bool lineIntersection(Point2D ours0, Point2D ours1, Point2D theirs0, Point2D theirs1)
+{
+    double theirs_lowerX = std::min(theirs0.first, theirs1.first);
+    double theirs_upperX = std::max(theirs0.first, theirs1.first);
+    double ours_lowerX = std::min(ours0.first, ours1.first);
+    double ours_upperX = std::max(ours0.first, ours1.first);
+
+    // Check if Y range of the lines overlap
+    double theirs_lowerY = std::min(theirs0.second, theirs1.second);
+    double theirs_upperY = std::max(theirs0.second, theirs1.second);
+    double ours_lowerY = std::min(ours0.second, ours1.second);
+    double ours_upperY = std::max(ours0.second, ours1.second);
+
+    bool y0_overlap = (ours_lowerY >= theirs_lowerY) && (ours_lowerY <= theirs_upperY);
+    bool y1_overlap = (ours_upperY >= theirs_lowerY) && (ours_lowerY <= theirs_upperY);
+    if(!(y0_overlap || y1_overlap))
+        return false;
+
+    double ours_m = (ours1.second - ours0.second) / (ours1.first - ours0.first);
+    double ours_b = ours0.second - ours_m * ours0.first;
+
+    double theirs_m = (theirs1.second - theirs0.second) / (theirs1.first - theirs0.first);
+    double theirs_b = theirs0.second - theirs_m * theirs0.first;
+
+    if(isinf(ours_m))
+    {
+        // Check if X range of the lines overlap
+        bool x_overlap = (theirs_lowerX < ours0.first) && (theirs_upperX > ours0.first);
+        if(!x_overlap)
+            return false;
+
+        double theirs_value = theirs_m * ours0.first + theirs_b;
+        return (theirs_value >= ours_lowerY) && (theirs_value <= ours_upperY);
+    }
+
+    if(isinf(theirs_m))
+    {
+        // Check if X range of the lines overlap
+        bool x_overlap = (ours_lowerX < theirs0.first) && (ours_upperX > theirs0.first);
+        if(!x_overlap)
+            return false; 
+
+        double ours_value = ours_m * theirs0.first + ours_b;
+        return (ours_value >= theirs_lowerY) && (ours_value <= theirs_upperY);
+    }
+
+    // Brute-Force
+    for(double pos = ours0.first; pos < ours1.first; pos+=epsilon)
+    {
+        if(pos >= theirs_lowerX && pos <= theirs_upperX)
+        {
+            double ours_value = ours_m * pos + ours_b;
+            double theirs_value = theirs_m * pos + theirs_b;
+            double diff = ours_value - theirs_value;
+            if(abs(diff) < epsilon)
+                return true;
+        }
+    }
+    return false;
 }
 
 // Default state validity checker.  It says every state is valid.
@@ -39,12 +102,12 @@ bool stateValidPointRobot(const ompl::base::State* state, const double minBound,
     double y = r2state->values[1];
 
     if(x < minBound || y < minBound || x > maxBound || y > maxBound)
-	return false;
-    
+        return false;
+
     for(Rect r : obstacles)
     {
-	if(x >= r[0].first && x <= r[2].first && y >= r[0].second && y <= r[2].second)
-	    return false;
+        if(x >= r[0].first && x <= r[2].first && y >= r[0].second && y <= r[2].second)
+            return false;
     }
 
     return true;
@@ -59,32 +122,31 @@ bool stateValidCircleRobot(const ompl::base::State* state, const double minBound
     double y = r2state->values[1];
 
     if(x < minBound || y < minBound || x > maxBound || y > maxBound)
-	return false;
-    
-    for(Rect r : obstacles)
+        return false;
+
+    for(const Rect& r : obstacles)
     {
-	if(x >= r[0].first-radius && x <= r[2].first+radius && y >= r[0].second && y <= r[2].second)
-	{
-	    return false;
-	}
-	else if(x >= r[0].first && x <= r[2].first && y >= r[0].second-radius && y <= r[2].second+radius)
-	{
-	    return false;
-	}
-	else 
-	{
-	    for(int i = 0; i < r.size(); ++i)
-	    {
-		if(dist(x, y, r[i].first, r[i].second) <= radius)
-		    return false;
-	    }
-	}
+        if(x >= r[0].first-radius && x <= r[2].first+radius && y >= r[0].second && y <= r[2].second)
+        {
+            return false;
+        }
+        else if(x >= r[0].first && x <= r[2].first && y >= r[0].second-radius && y <= r[2].second+radius)
+        {
+            return false;
+        }
+        else 
+        {
+            for(int i = 0; i < r.size(); ++i)
+            {
+                if(dist(x, y, r[i].first, r[i].second) <= radius)
+                    return false;
+            }
+        }
     }
 
     return true;
 }
 
-// TODO
 bool stateValidSquareRobot(const ompl::base::State* state, const double minBound, const double maxBound, const std::vector<Rect> obstacles)
 {
     const ompl::base::CompoundState* cstate;
@@ -98,15 +160,52 @@ bool stateValidSquareRobot(const ompl::base::State* state, const double minBound
     double y = r2state->values[1];
     double theta = so2state->value;    
 
-    double x1 = x + 0.5*cos(theta);
-    double y1 = y + 0.5*sin(theta);
-    double x2 = x - 0.5*cos(theta);
-    double y2 = y - 0.5*sin(theta);
+    // Initial Square Robot Points
+    std::vector<Point2D> pts;
+    pts.push_back(std::make_pair(-square, -square));
+    pts.push_back(std::make_pair(square, -square));
+    pts.push_back(std::make_pair(square, square));
+    pts.push_back(std::make_pair(-square, square));
 
-    // check if line seg intersects all 4 sides of obstacle
-    // check if new end points are still within bounds
-    double x3 = -0.5; double y3 = -0.5;
+    // Transform Square Robot Points to state position
+    for(int i = 0; i < pts.size(); ++i)
+    {
+        double newX = pts[i].first * cos(theta) - pts[i].second * sin(theta) + x;
+        double newY = pts[i].first * sin(theta) + pts[i].second * cos(theta) + y;
 
+        if(newX < minBound || newY < minBound || newX > maxBound || newY > maxBound)
+        {
+            return false;
+        }
+
+        pts[i] = std::make_pair(newX, newY);
+    }
+
+    for(const Rect& r : obstacles)
+    {
+        // None of the points of square robot are contained inside of the obstacle 
+        /*
+        for(int j = 0; j < pts.size(); ++j)
+        {
+            if(pts[j].first >= r[0].first && pts[j].first <= r[2].first && pts[j].second >= r[0].second && pts[j].second <= r[2].second)
+                return false;
+        }
+        */
+
+        // Edge of rectangle r
+        for(int i = 0; i < r.size(); ++i)
+        {
+            // Edge of square robot
+            for(int j = 0; j < pts.size(); ++j)
+            {
+                bool intersection = lineIntersection(pts[j], pts[(j+1) % pts.size()], r[i], r[(i+1) % r.size()]);
+                if(intersection)
+                {
+                    return false;
+                }
+            }
+        }
+    }
     return true;
 }
 
@@ -139,15 +238,15 @@ void planWithSimpleSetupR2(int environment, int robot, std::vector<Rect> obstacl
     // is a collision checker
     switch(robot)
     {
-	case 0:
+        case 0:
             ss.setStateValidityChecker(boost::bind(stateValidPointRobot, _1, -1, 1, obstacles));
-	    break;
-	case 1:
+            break;
+        case 1:
             ss.setStateValidityChecker(boost::bind(stateValidCircleRobot, _1, -1, 1, obstacles));
-	    break;
-	default:
-    	    ss.setStateValidityChecker(stateAlwaysValid);
-	    break;
+            break;
+        default:
+            ss.setStateValidityChecker(stateAlwaysValid);
+            break;
     }
 
     // Step 4) Specify the start and goal states
@@ -222,15 +321,7 @@ void planWithSimpleSetupSE2(int environment, int robot, std::vector<Rect> obstac
     // This is a function that takes a state and returns whether the state is a
     // valid configuration of the system or not.  For geometric planning, this
     // is a collision checker
-    switch(robot)
-    {
-	case 2:
-            ss.setStateValidityChecker(boost::bind(stateValidSquareRobot, _1, -1, 1, obstacles));
-	    break;
-	default:
-    	    ss.setStateValidityChecker(stateAlwaysValid);
-	    break;
-    }
+    ss.setStateValidityChecker(boost::bind(stateValidSquareRobot, _1, -1, 1, obstacles));
 
     // Step 4) Specify the start and goal states
     // ScopedState creates the correct state instance for the state space
@@ -238,12 +329,12 @@ void planWithSimpleSetupSE2(int environment, int robot, std::vector<Rect> obstac
     // The indexes correspond to the order that the StateSpace components were
     // added into the StateSpace
     ompl::base::ScopedState<> start(se2);
-    start[0] = -0.9;
-    start[1] = -0.9;
-    start[2] = 0.0;
+    start[0] = -0.75;
+    start[1] = -0.75;
+    start[2] = -0.0;
     ompl::base::ScopedState<> goal(se2);
-    goal[0] = 0.9;
-    goal[1] = 0.9;
+    goal[0] = 0.75;
+    goal[1] = 0.75;
     goal[2] = 0.0;
 
     // set the start and goal states
@@ -294,7 +385,7 @@ int main(int, char **)
 
         std::cin >> choice;
     } while (choice < 0 || choice > 2);
- 
+
     int environment;
     do
     {
@@ -310,29 +401,29 @@ int main(int, char **)
     std::vector<Point2D> rect2;
     if(!environment)
     {
-	// Go-Around L-Shaped Obstacle
-	rect1.push_back(std::make_pair(-0.5, -0.5));
-	rect1.push_back(std::make_pair(-0.25, -0.5));
-	rect1.push_back(std::make_pair(-0.25, 0.5));
-	rect1.push_back(std::make_pair(-0.5, 0.5));
+        // Go-Around L-Shaped Obstacle
+        rect1.push_back(std::make_pair(-0.5, -0.5));
+        rect1.push_back(std::make_pair(-0.25, -0.5));
+        rect1.push_back(std::make_pair(-0.25, 0.5));
+        rect1.push_back(std::make_pair(-0.5, 0.5));
 
-	rect2.push_back(std::make_pair(-0.25, -0.5));
-	rect2.push_back(std::make_pair(0.25, -0.5));
-	rect2.push_back(std::make_pair(0.25, -0.25));
-	rect2.push_back(std::make_pair(-0.25, -0.25));
+        rect2.push_back(std::make_pair(-0.25, -0.5));
+        rect2.push_back(std::make_pair(0.25, -0.5));
+        rect2.push_back(std::make_pair(0.25, -0.25));
+        rect2.push_back(std::make_pair(-0.25, -0.25));
     }
     else
     {
-	// Narrow Passage in-between two obstacles
-	rect1.push_back(std::make_pair(-1.0, -0.5));
-	rect1.push_back(std::make_pair(-0.25, -0.5));
-	rect1.push_back(std::make_pair(-0.25, 0.5));
-	rect1.push_back(std::make_pair(-1.0, 0.5));
+        // Narrow Passage in-between two obstacles
+        rect1.push_back(std::make_pair(-1.0, -0.5));
+        rect1.push_back(std::make_pair(-0.25, -0.5));
+        rect1.push_back(std::make_pair(-0.25, 0.5));
+        rect1.push_back(std::make_pair(-1.0, 0.5));
 
-	rect2.push_back(std::make_pair(0.25, -0.5));
-	rect2.push_back(std::make_pair(1.0, -0.5));
-	rect2.push_back(std::make_pair(1.0, 0.5));
-	rect2.push_back(std::make_pair(0.25, 0.5));
+        rect2.push_back(std::make_pair(0.25, -0.5));
+        rect2.push_back(std::make_pair(1.0, -0.5));
+        rect2.push_back(std::make_pair(1.0, 0.5));
+        rect2.push_back(std::make_pair(0.25, 0.5));
     }
     obstacles.push_back(rect1);
     obstacles.push_back(rect2);

@@ -22,11 +22,11 @@ def plotR2(path, environment, robot):
         ax.add_patch(patches.Polygon([(1.0,0.5),(1.0,-0.5),(0.25,-0.5),(0.25,0.5)], fill=True, color='0.20'))
 
     # Plotting the path
-    if robot == '0': # point robot
-        X = [p[0] for p in path]
-        Y = [p[1] for p in path]
-        ax.plot(X, Y)
-    elif robot == '1': # circle robot
+    X = [p[0] for p in path]
+    Y = [p[1] for p in path]
+    ax.plot(X, Y)
+
+    if robot == '1': # circle robot
         for p in path:
             ax.add_patch(patches.Circle((p[0],p[1]), 0.1, fill = False, color = '0.20'))
 
@@ -56,7 +56,6 @@ def plotSE2(path, environment, robot):
     ax.plot(X, Y)
 
     # Plotting the square as hollow shapes with side length 2*hside
-    #lineSeg = [[-0.5, 0], [0.5, 0]]
     hside = 0.125
     lineSegs = [[[-hside, hside], [hside, hside]], [[-hside, -hside], [hside, -hside]], [[-hside, hside], [-hside, -hside]], [[hside, hside], [hside, -hside]]]
     for lineSeg in lineSegs:
@@ -66,7 +65,7 @@ def plotSE2(path, environment, robot):
             y = []
             for v in lineSeg:
                 x.append(v[0] * cos(p[2]) - v[1] * sin(p[2]) + p[0])
-                y.append(v[0] * sin(p[2]) - v[1] * cos(p[2]) + p[1])
+                y.append(v[0] * sin(p[2]) + v[1] * cos(p[2]) + p[1])
 
             ax.plot(x, y, 'k')
 
